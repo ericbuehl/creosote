@@ -91,6 +91,12 @@ the virtual environment for resolving and the ability to read the dependency's
 `RECORD` or `top_level.txt` file). If a dependency does not have any imports
 associated, it is considered unused.
 
+Both regular import statements (`import foo`, `from foo import bar`) and
+`importlib`-style dynamic imports (`importlib.import_module("foo")`,
+`import_module("foo")`) are detected. Note that only string-literal module
+names can be detected statically; a variable passed to `import_module` will not
+be associated with any dependency.
+
 Creosote also scans the Django settings `INSTALLED_APPS` and `MIDDLEWARE` lists
 when the option `--django-settings` argument is used.
 
@@ -111,9 +117,9 @@ Enable using `--use-feature <FEATURE>`. Use at your own risk!
 
 ### 😤 Known limitations
 
-- `importlib` imports are not detected by the AST parser (a great first
-  contribution for anyone inclined 😄, reach out or start looking at
-  `parsers.py:get_module_info_from_python_file`.
+- Dynamic `importlib` usage where the module name is not a string literal (e.g.
+  `importlib.import_module(var)`) cannot be detected statically and will not be
+  associated with a dependency.
 
 ## 🥧 History and ambition
 

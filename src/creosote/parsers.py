@@ -336,7 +336,7 @@ def get_module_info_from_python_file(path: str) -> Generator[ImportInfo, None, N
             logger.warning(f"Syntax error, cannot AST-parse {path}: {e}")
 
     if root:
-        for node in ast.iter_child_nodes(root):  # or potentially ast.walk ?
+        for node in ast.iter_child_nodes(root):
             if isinstance(node, ast.Import):
                 module = []
             elif isinstance(node, ast.ImportFrom):
@@ -351,6 +351,38 @@ def get_module_info_from_python_file(path: str) -> Generator[ImportInfo, None, N
                         name=n.name.split("."),
                         alias=n.asname,
                     )
+
+        for node in ast.walk(root):
+            if not isinstance(node, ast.Call):
+                continue
+
+            module_name: str | None = None
+
+            # importlib.import_module("foo")
+            if (
+                isinstance(node.func, ast.Attribute)
+                and node.func.attr == "import_module"
+                and isinstance(node.func.value, ast.Name)
+                and node.func.value.id == "importlib"
+                and node.args
+                and isinstance(node.args[0], ast.Constant)
+                and isinstance(node.args[0].value, str)
+            ):
+                module_name = node.args[0].value.split(".")[0]
+
+            # import_module("foo")  — after: from importlib import import_module
+            elif (
+                isinstance(node.func, ast.Name)
+                and node.func.id == "import_module"
+                and node.args
+                and isinstance(node.args[0], ast.Constant)
+                and isinstance(node.args[0].value, str)
+            ):
+                module_name = node.args[0].value.split(".")[0]
+
+            if module_name:
+                yield ImportInfo(module=[], name=[module_name], alias=None)
+
     if is_notebook:
         Path(path).unlink()
 

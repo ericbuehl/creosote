@@ -4,7 +4,8 @@ from pathlib import Path
 import pytest
 from loguru import logger
 
-from creosote.parsers import get_modules_from_django_settings
+from creosote.models import ImportInfo
+from creosote.parsers import get_module_info_from_python_file, get_modules_from_django_settings
 
 
 @pytest.mark.parametrize(
@@ -237,3 +238,57 @@ def test_get_modules_from_django_settings_not_a_list_warning(
         f"Could not find INSTALLED_APPS or MIDDLEWARE in {settings_file}."
         in caplog.text
     )
+
+
+@pytest.mark.parametrize(
+    ("source", "expected"),
+    [
+        pytest.param(
+            'importlib.import_module("requests")',
+            [ImportInfo(module=[], name=["requests"])],
+            id="attribute_call_simple",
+        ),
+        pytest.param(
+            'from importlib import import_module\nimport_module("requests")',
+            [
+                ImportInfo(module=["importlib"], name=["import_module"], alias=None),
+                ImportInfo(module=[], name=["requests"]),
+            ],
+            id="bare_call_after_from_import",
+        ),
+        pytest.param(
+            'importlib.import_module("requests.auth")',
+            [ImportInfo(module=[], name=["requests"])],
+            id="dotted_module_top_level_only",
+        ),
+        pytest.param(
+            'def foo():\n    importlib.import_module("requests")',
+            [ImportInfo(module=[], name=["requests"])],
+            id="call_inside_function",
+        ),
+        pytest.param(
+            "importlib.import_module(some_var)",
+            [],
+            id="dynamic_arg_skipped",
+        ),
+        pytest.param(
+            'import os\nimportlib.import_module("requests")',
+            [
+                ImportInfo(module=[], name=["os"]),
+                ImportInfo(module=[], name=["requests"]),
+            ],
+            id="regular_import_and_importlib_call",
+        ),
+    ],
+)
+def test_get_module_info_importlib(
+    tmp_path: Path,
+    source: str,
+    expected: list[ImportInfo],
+) -> None:
+    temp_file = tmp_path / "test_module.py"
+    _ = temp_file.write_text(source, encoding="utf-8")
+
+    result = list(get_module_info_from_python_file(path=str(temp_file)))
+
+    assert result == expected
